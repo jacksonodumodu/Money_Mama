@@ -1,0 +1,225 @@
+/* =========================================================
+   Money Grove — forest greens & browns theme
+========================================================= */
+:root {
+  --bark:        #3b2a1a;   /* dark brown */
+  --bark-2:      #52402b;
+  --soil:        #6b4f34;   /* mid brown */
+  --wood:        #8a6d4b;   /* light wood */
+  --forest:      #2f5233;   /* deep forest green */
+  --forest-2:    #3e6b45;
+  --leaf:        #5a9367;   /* leaf green */
+  --moss:        #7fae7a;
+  --sun:         #e8c66b;   /* warm gold (money/coins) */
+  --sun-deep:    #c99b39;
+  --cream:       #f3ecdd;   /* parchment bg */
+  --cream-2:     #e7dcc4;
+  --danger:      #a8412f;   /* debt red-brown */
+  --danger-2:    #c25a45;
+  --ink:         #2a2118;
+  --shadow:      rgba(30, 20, 10, 0.25);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  background: linear-gradient(160deg, #24361f 0%, #33261a 100%);
+  color: var(--ink);
+  overscroll-behavior: none;
+  user-select: none;
+}
+#app { height: 100%; }
+
+.screen {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100%;
+  background: var(--cream);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 40px var(--shadow);
+}
+
+/* ---------- Top status bar ---------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, var(--forest) 0%, var(--forest-2) 100%);
+  color: var(--cream);
+  position: sticky; top: 0; z-index: 20;
+  box-shadow: 0 3px 10px var(--shadow);
+}
+.brand { font-weight: 800; font-size: 20px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px; }
+.stat-pills { display: flex; gap: 8px; }
+.pill {
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(0,0,0,0.18);
+  padding: 5px 10px; border-radius: 999px;
+  font-weight: 800; font-size: 14px;
+}
+.pill.cash { color: var(--sun); }
+.pill.debt { color: var(--danger-2); background: rgba(168,65,47,0.25); }
+.pill.week { color: var(--moss); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  border: none; cursor: pointer;
+  font-family: inherit; font-weight: 800; font-size: 17px;
+  color: var(--cream);
+  background: linear-gradient(180deg, var(--leaf) 0%, var(--forest-2) 100%);
+  padding: 15px 20px; border-radius: 16px; width: 100%;
+  box-shadow: 0 5px 0 var(--forest), 0 6px 10px var(--shadow);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--forest); }
+.btn:disabled { opacity: 0.45; box-shadow: 0 5px 0 var(--forest); }
+.btn.gold { background: linear-gradient(180deg, var(--sun) 0%, var(--sun-deep) 100%); box-shadow: 0 5px 0 #9c7825, 0 6px 10px var(--shadow); color: var(--bark); }
+.btn.gold:active { box-shadow: 0 1px 0 #9c7825; }
+.btn.danger { background: linear-gradient(180deg, var(--danger-2) 0%, var(--danger) 100%); box-shadow: 0 5px 0 #7a2e20, 0 6px 10px var(--shadow); }
+.btn.danger:active { box-shadow: 0 1px 0 #7a2e20; }
+.btn.wood { background: linear-gradient(180deg, var(--wood) 0%, var(--soil) 100%); box-shadow: 0 5px 0 var(--bark), 0 6px 10px var(--shadow); }
+.btn.small { font-size: 14px; padding: 10px 14px; width: auto; border-radius: 12px; box-shadow: 0 4px 0 var(--forest); }
+.btn.ghost { background: transparent; color: var(--soil); box-shadow: none; font-size: 15px; padding: 8px; }
+.btn.ghost:active { transform: none; }
+
+/* ---------- Cards / panels ---------- */
+.content { flex: 1; overflow-y: auto; padding: 16px; }
+.content::-webkit-scrollbar { display: none; }
+.panel {
+  background: #fff;
+  border: 2px solid var(--cream-2);
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: 0 4px 14px var(--shadow);
+  margin-bottom: 14px;
+}
+.panel h2 { margin: 0 0 6px; color: var(--forest); font-size: 20px; }
+.panel p { margin: 0 0 10px; color: var(--soil); font-size: 15px; line-height: 1.45; }
+.muted { color: var(--wood); font-size: 13px; }
+
+/* ---------- Home / hub ---------- */
+.hero {
+  text-align: center; padding: 18px 16px 6px;
+}
+.hero .goal-card {
+  background: linear-gradient(180deg, var(--bark-2), var(--bark));
+  color: var(--cream);
+  border-radius: 20px; padding: 16px; margin-bottom: 6px;
+  box-shadow: 0 4px 14px var(--shadow);
+}
+.goal-title { font-size: 14px; opacity: 0.85; font-weight: 700; }
+.goal-amount { font-size: 34px; font-weight: 900; color: var(--sun); margin: 2px 0; }
+.progress-track { height: 14px; background: rgba(0,0,0,0.3); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--leaf), var(--sun)); border-radius: 999px; transition: width 0.5s; }
+.checkpoints { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--moss); font-weight: 700; }
+
+.game-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.game-tile {
+  border: none; cursor: pointer; font-family: inherit;
+  border-radius: 20px; padding: 18px 12px; color: var(--cream);
+  text-align: center; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 6px 12px var(--shadow);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.game-tile:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+.game-tile .emoji { font-size: 40px; display: block; }
+.game-tile .name { font-weight: 800; font-size: 16px; margin-top: 6px; }
+.game-tile .pay { font-size: 12px; opacity: 0.9; margin-top: 2px; }
+.tile-solitaire { background: linear-gradient(180deg, #3e6b45, #2f5233); }
+.tile-bejeweled { background: linear-gradient(180deg, #6b4f34, #52402b); }
+.tile-bank      { background: linear-gradient(180deg, var(--sun), var(--sun-deep)); color: var(--bark); }
+.tile-bank .name, .tile-bank .pay { color: var(--bark); }
+.tile-locked    { background: linear-gradient(180deg, #9a9a8a, #7d7d6e); cursor: default; }
+.tile-locked:active { transform: none; box-shadow: 0 5px 0 rgba(0,0,0,0.25); }
+
+/* ---------- Modal ---------- */
+.overlay {
+  position: fixed; inset: 0; background: rgba(20,14,8,0.6);
+  display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 40;
+}
+.modal {
+  background: var(--cream); border-radius: 24px; padding: 24px; max-width: 360px; width: 100%;
+  text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  animation: pop 0.3s cubic-bezier(.2,.9,.3,1.2);
+}
+@keyframes pop { 0%{transform:scale(0.7);opacity:0} 100%{transform:scale(1);opacity:1} }
+.modal .big-emoji { font-size: 56px; }
+.modal h2 { color: var(--forest); margin: 6px 0; }
+.modal .amt-good { color: var(--sun-deep); font-weight: 900; font-size: 30px; }
+.modal .amt-bad { color: var(--danger); font-weight: 900; font-size: 30px; }
+
+/* ---------- game back header ---------- */
+.gamebar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; }
+.gamebar .back { background: none; border: none; color: var(--forest); font-weight: 800; font-size: 16px; cursor: pointer; }
+.gamebar .score { font-weight: 800; color: var(--soil); }
+
+/* ---------- number inputs (bank) ---------- */
+.slider-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+input[type=range] { flex: 1; accent-color: var(--forest); }
+.amount-display { font-size: 28px; font-weight: 900; color: var(--forest); text-align: center; }
+.chart { width: 100%; height: 120px; background: #faf6ec; border-radius: 12px; border: 1px solid var(--cream-2); }
+.warn { color: var(--danger); font-weight: 700; font-size: 14px; }
+.good { color: var(--forest-2); font-weight: 700; font-size: 14px; }
+
+/* ---------- solitaire ---------- */
+.sol-board { padding: 8px; }
+.sol-top { display: flex; justify-content: space-between; margin-bottom: 10px; }
+.sol-piles { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.card {
+  aspect-ratio: 5/7; border-radius: 6px; background: #fff; border: 1px solid #cbb993;
+  display: flex; align-items: flex-start; justify-content: flex-start; padding: 3px 4px;
+  font-weight: 800; font-size: clamp(9px, 3.2vw, 15px); position: relative; cursor: pointer;
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.card.red { color: #b23b2e; }
+.card.black { color: #2a2118; }
+.card.back { background: repeating-linear-gradient(45deg, var(--forest), var(--forest) 6px, var(--forest-2) 6px, var(--forest-2) 12px); }
+.card.empty { background: rgba(0,0,0,0.06); border: 1px dashed var(--wood); box-shadow: none; }
+.card.sel { outline: 3px solid var(--sun); }
+.pile { position: relative; min-height: 60px; }
+.pile .card { position: absolute; left: 0; right: 0; }
+
+/* ---------- bejeweled ---------- */
+.gem-grid { display: grid; gap: 4px; margin: 0 auto; touch-action: none; }
+.gem {
+  aspect-ratio: 1; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  font-size: clamp(18px, 7vw, 30px); cursor: pointer; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.15);
+  transition: transform 0.1s;
+}
+.gem.sel { outline: 3px solid #fff; transform: scale(0.9); }
+
+.center { text-align: center; }
+.spacer { height: 8px; }
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; }
+
+
+/* ---------- Money Mama character ---------- */
+.mama-panel { background: linear-gradient(180deg, #fffdf6, #fbf3e0); border-color: #e6d3a8; }
+.mama-row { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0; }
+.mama-face {
+  flex: 0 0 auto;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff, #e7dcc4);
+  border: 3px solid var(--forest-2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; box-shadow: 0 3px 8px var(--shadow);
+}
+.mama-bubble {
+  position: relative; flex: 1;
+  background: #fff; border: 2px solid var(--cream-2); border-radius: 14px;
+  padding: 10px 12px; color: var(--bark); font-size: 14.5px; line-height: 1.4;
+  box-shadow: 0 2px 6px var(--shadow);
+}
+.mama-bubble::before {
+  content: ''; position: absolute; left: -9px; top: 16px;
+  border-width: 7px 9px 7px 0; border-style: solid;
+  border-color: transparent var(--cream-2) transparent transparent;
+}
+.mama-bubble::after {
+  content: ''; position: absolute; left: -6px; top: 17px;
+  border-width: 6px 8px 6px 0; border-style: solid;
+  border-color: transparent #fff transparent transparent;
+}
+/* Mama in modals sits centered */
+.modal .mama-row { text-align: left; }
