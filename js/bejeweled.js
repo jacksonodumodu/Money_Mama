@@ -1,10 +1,11 @@
 /* =========================================================
-   Money Mama — Bejeweled-style match-3
-   Swap adjacent gems, match 3+, cascades. Score -> cash.
+   Money Mama — "Mom's Match" match-3
+   Swap adjacent tiles, match 3+, cascades. Score -> winnings.
+   Suburban-mom themed tokens (wine, coffee, soccer, etc.).
 ========================================================= */
 (function () {
   const { el } = UI;
-  const GEMS = ['🌰', '🍄', '🌿', '🍁', '🌸', '🐚']; // forest-y tokens
+  const GEMS = ['🍷', '☕', '⚽', '🛒', '💐', '🧁']; // wine, coffee, soccer, groceries, flowers, cupcake
   const SIZE = 7;
   const MOVES = 12;
 
@@ -106,18 +107,21 @@
       else { sel = { r, c }; rebuild(); }
     }
 
+    // Gross winnings scale with score. Tuned so skilled play averages
+    // above the buy-in, but a weak round can come in under it (net loss).
     function payout() {
       const t = Engine.tierById(run.tierId);
-      const rate = t.id === 1 ? 0.05 : t.id === 2 ? 0.12 : 0.3; // cash per score point
+      // per-point rate calibrated to the tier's buy-in
+      const rate = t.buyIn / 300; // ~300 pts ≈ buy-in break-even; good play scores more
       return { cash: Math.round(score * rate), score };
     }
 
     function finish() {
       const p = payout();
-      const res = Engine.earn(run, p.cash);
+      // engine settles: adds winnings, computes net vs buy-in, ticks a week
+      const res = Engine.settleGame(run, p.cash);
       onEarn(res, {
-        emoji: p.score > 800 ? '💎' : p.score > 300 ? '✨' : '🍄',
-        title: p.score > 800 ? 'Dazzling!' : p.score > 300 ? 'Nice matches!' : 'Round over',
+        title: p.score > 800 ? 'Dazzling round!' : p.score > 300 ? 'Nice matches!' : 'Round over',
         detail: `You scored ${p.score} points.`,
       });
     }
@@ -154,8 +158,10 @@
     function confirmExit() {
       const p = payout();
       UI.modal({
-        emoji: '💎', title: 'Cash out?',
-        bodyNodes: [ el('p', null, `You'll earn ${Engine.fmt(p.cash)} for ${p.score} points.`) ],
+        title: 'Cash out?',
+        bodyNodes: [
+          Mama.speech(`You'll take home ${Engine.fmt(p.cash)} for ${p.score} points, dear.`, 'happy'),
+        ],
         buttons: [
           { label: 'Cash out', class: 'gold', onClick: (cl) => { cl(); finish(); } },
           { label: 'Keep playing', class: 'ghost' },

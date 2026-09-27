@@ -58,21 +58,21 @@
     const wrap = el('div', null);
 
     function payout() {
-      // cash scales with foundation cards placed (0..52). Full win = big bonus.
+      // Winnings scale with foundation cards placed (0..52), calibrated to the
+      // tier's buy-in so a good game beats the buy-in and a weak one falls short.
       const placed = g.foundations.reduce((a, f) => a + f.length, 0);
       const t = Engine.tierById(run.tierId);
-      const base = t.id === 1 ? 4 : t.id === 2 ? 10 : 25; // per card
-      let cash = placed * base;
+      const perCard = t.buyIn / 15;         // ~15 cards ≈ break-even on the buy-in
+      let cash = Math.round(placed * perCard);
       const complete = placed === 52;
-      if (complete) cash += (t.id === 1 ? 200 : t.id === 2 ? 1500 : 12000);
+      if (complete) cash += t.buyIn * 4;    // big bonus for clearing the whole board
       return { cash, placed, complete };
     }
 
     function finish() {
       const p = payout();
-      const res = Engine.earn(run, p.cash);
+      const res = Engine.settleGame(run, p.cash);
       onEarn(res, {
-        emoji: p.complete ? '🏆' : (p.placed > 0 ? '🃏' : '🙂'),
         title: p.complete ? 'You cleared it!' : (p.placed > 0 ? 'Nice progress!' : 'Cashed out'),
         detail: `You placed ${p.placed} card${p.placed===1?'':'s'} to the foundations.`,
       });
@@ -231,8 +231,8 @@
     function confirmExit() {
       const p = payout();
       UI.modal({
-        emoji: '🃏', title: 'Cash out?',
-        bodyNodes: [ el('p', null, `You'll earn ${Engine.fmt(p.cash)} for ${p.placed} cards placed. Leaving mid-game still pays what you've earned.`) ],
+        title: 'Cash out?',
+        bodyNodes: [ Mama.speech(`You'll take home ${Engine.fmt(p.cash)} for ${p.placed} cards placed, sweetie. Leaving early still pays what you earned.`, 'happy') ],
         buttons: [
           { label: 'Cash out', class: 'gold', onClick: (c) => { c(); finish(); } },
           { label: 'Keep playing', class: 'ghost' },

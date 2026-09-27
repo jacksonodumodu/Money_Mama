@@ -30,7 +30,49 @@
   }
 
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); return node; }
-  function mount(node) { const app = document.getElementById('app'); clear(app); app.appendChild(node); }
+
+  function reduceMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+  }
+
+  // Mount a new screen with a gentle cross-fade + slight slide so navigation
+  // doesn't feel like a jarring hard swap. Respects reduce-motion settings.
+  function mount(node) {
+    const app = document.getElementById('app');
+    if (reduceMotion() || !app.firstChild) {
+      clear(app); app.appendChild(node);
+      return;
+    }
+    const old = app.firstChild;
+    node.classList.add('screen-enter');
+    // fade the old one out, then remove
+    old.classList.add('screen-exit');
+    app.appendChild(node);
+    // next frame: trigger enter
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        node.classList.add('screen-enter-active');
+      });
+    });
+    setTimeout(() => { if (old.parentNode === app) app.removeChild(old); node.classList.remove('screen-enter', 'screen-enter-active'); }, 320);
+  }
+
+  // Animate a number counting up/down inside a node (money feels alive).
+  function countTo(node, from, to, opts) {
+    opts = opts || {};
+    const fmt = opts.fmt || ((n) => Math.round(n));
+    const dur = reduceMotion() ? 0 : (opts.dur || 600);
+    if (dur === 0) { node.textContent = fmt(to); return; }
+    const start = performance.now();
+    function frame(now) {
+      const p = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      node.textContent = fmt(from + (to - from) * eased);
+      if (p < 1) requestAnimationFrame(frame);
+      else node.textContent = fmt(to);
+    }
+    requestAnimationFrame(frame);
+  }
 
   // Modal overlay. buttons = [{label, class, onClick}]
   function modal({ emoji, title, bodyNodes, buttons }) {
@@ -73,5 +115,5 @@
     return wrap.firstElementChild;
   }
 
-  window.UI = { el, clear, mount, modal, lineChart };
+  window.UI = { el, clear, mount, modal, lineChart, countTo, reduceMotion };
 })();

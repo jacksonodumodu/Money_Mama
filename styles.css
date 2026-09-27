@@ -199,12 +199,13 @@ input[type=range] { flex: 1; accent-color: var(--forest); }
 .mama-row { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0; }
 .mama-face {
   flex: 0 0 auto;
-  width: 52px; height: 52px; border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #fff, #e7dcc4);
+  width: 54px; height: 54px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #fff, #eadfc8);
   border: 3px solid var(--forest-2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 30px; box-shadow: 0 3px 8px var(--shadow);
+  display: flex; align-items: flex-end; justify-content: center;
+  overflow: hidden; box-shadow: 0 3px 8px var(--shadow);
 }
+.mama-face svg { display: block; margin-bottom: -4px; }
 .mama-bubble {
   position: relative; flex: 1;
   background: #fff; border: 2px solid var(--cream-2); border-radius: 14px;
@@ -223,3 +224,40 @@ input[type=range] { flex: 1; accent-color: var(--forest); }
 }
 /* Mama in modals sits centered */
 .modal .mama-row { text-align: left; }
+
+
+/* ---------- Screen transitions (fix disorientation) ---------- */
+.screen-enter { opacity: 0; transform: translateY(8px); }
+.screen-enter-active { opacity: 1; transform: translateY(0); transition: opacity 0.26s ease, transform 0.26s ease; }
+.screen-exit { position: absolute; top: 0; left: 0; right: 0; opacity: 1; pointer-events: none;
+  animation: screenExit 0.2s ease forwards; }
+@keyframes screenExit { to { opacity: 0; transform: translateY(-6px); } }
+#app { position: relative; }
+
+/* Gentle entrance for panels/tiles */
+.panel, .game-tile, .goal-card { animation: rise 0.32s ease both; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-enter-active, .panel, .game-tile, .goal-card { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Suburban-mom accents ---------- */
+.topbar { background: linear-gradient(180deg, #3e6b45 0%, #345a3a 100%); }
+.hero .goal-card { background: linear-gradient(180deg, #52402b, #3b2a1a); }
+/* little decorative motif strip (wine / coffee / soccer / minivan) */
+.motif { text-align: center; font-size: 18px; letter-spacing: 8px; opacity: 0.5; margin: 2px 0 8px; }
+
+/* income + skip week controls on hub */
+.week-controls { display: flex; gap: 10px; margin-top: 6px; }
+.income-note { color: var(--forest-2); font-weight: 700; font-size: 13px; text-align:center; }
+.buyin-note { color: var(--soil); font-weight: 700; font-size: 13px; }
+
+/* tips card */
+.tips-card { background: linear-gradient(180deg, #fbf5e6, #f3e8cf); border-color: #e6d3a8; }
+
+
+/* Mama's face in the top brand */
+.brand { gap: 4px; }
+.brand-face { display: inline-flex; align-items: center; }
+.brand-face svg { display: block; border-radius: 50%; background: rgba(255,255,255,0.25); }

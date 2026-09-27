@@ -11,6 +11,7 @@
     const fmt = Engine.fmt;
 
     let investAmt = 0;
+    let repayAmt = 0;
 
     const wrap = el('div', { class: 'content' });
 
@@ -67,17 +68,34 @@
         el('div', { class: 'warn' },
           `A $500 loan grows ${(t.debtRate*100).toFixed(0)}%/week — in 12 weeks you'd owe Mama ~${fmt(debtPreview[debtPreview.length-1])}.`),
         lineChart(debtPreview, '#a8412f', Math.max(run.debt, 500)),
-        el('div', { class: 'row', style: { marginTop: '6px' } }, [
-          el('button', { class: 'btn danger',
-            onclick: () => confirmBorrow() }, '💸 Borrow $500'),
-          el('button', { class: 'btn',
-            disabled: (run.debt <= 0 || run.cash <= 0) ? '' : null,
-            onclick: () => { Engine.repay(run, run.debt); refresh(); } }, 'Pay Mama back'),
-        ]),
-        run.debt > 0
-          ? el('p', { class: 'warn', style:{marginTop:'8px'} }, `You owe Mama ${fmt(run.debt)}. Pay it off fast before it snowballs!`)
-          : el('p', { class: 'good', style:{marginTop:'8px'} }, "Debt-free — Mama's proud of you. Keep it that way! 🌱"),
+        el('button', { class: 'btn danger', style:{marginTop:'6px'},
+          onclick: () => confirmBorrow() }, '💸 Borrow $500'),
       ]));
+
+      // --- flexible repayment (only shown when you owe) ---
+      if (run.debt > 0) {
+        const maxRepay = Math.min(run.cash, Math.round(run.debt));
+        if (repayAmt > maxRepay) repayAmt = maxRepay;
+        wrap.appendChild(el('div', { class: 'panel' }, [
+          el('h2', { style:{color:'var(--danger)'} }, '💳 Pay Mama back'),
+          Mama.speech(`You owe me ${fmt(run.debt)}, sweetie. Pay back whatever you can — every bit stops it from growing.`, 'stern'),
+          el('div', { class: 'amount-display' }, fmt(repayAmt)),
+          rangeRow(0, maxRepay, repayAmt, (v) => { repayAmt = v; rebuild(); }),
+          el('div', { class: 'row', style: { marginTop: '6px' } }, [
+            el('button', { class: 'btn gold', disabled: repayAmt <= 0 ? '' : null,
+              onclick: () => { Engine.repay(run, repayAmt); repayAmt = 0; refresh(); } }, 'Pay this amount'),
+            el('button', { class: 'btn', disabled: maxRepay <= 0 ? '' : null,
+              onclick: () => { Engine.repay(run, maxRepay); repayAmt = 0; refresh(); } }, `Pay max (${fmt(maxRepay)})`),
+          ]),
+          maxRepay < Math.round(run.debt)
+            ? el('p', { class:'warn', style:{marginTop:'6px'} }, "Not enough cash to clear it all — pay what you can, then earn more.")
+            : null,
+        ]));
+      } else {
+        wrap.appendChild(el('div', { class: 'panel' }, [
+          el('p', { class: 'good center' }, "Debt-free — Mama's proud of you. Keep it that way! 🌟"),
+        ]));
+      }
 
       wrap.appendChild(el('button', { class: 'btn wood', onclick: onBack }, '← Back to games'));
       wrap.appendChild(el('div', { class: 'spacer' }));
