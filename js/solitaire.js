@@ -13,7 +13,8 @@
 
   function makeDeck() {
     const d = [];
-    for (const s of SUITS) for (const r of RANKS) d.push({ suit: s, rank: r, faceUp: false });
+    let id = 0;
+    for (const s of SUITS) for (const r of RANKS) d.push({ id: id++, suit: s, rank: r, faceUp: false });
     // shuffle
     for (let i = d.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -155,13 +156,56 @@
     function cardEl(card, opts) {
       opts = opts || {};
       if (!card) return el('div', { class: 'card empty', onclick: opts.onclick });
-      if (!card.faceUp) return el('div', { class: 'card back', onclick: opts.onclick });
+      if (!card.faceUp) {
+        const b = el('div', { class: 'card back', onclick: opts.onclick });
+        b.dataset.cid = card.id;
+        return b;
+      }
       const sel = opts.selected ? ' sel' : '';
-      return el('div', { class: 'card ' + color(card.suit) + sel, onclick: opts.onclick },
+      const node = el('div', { class: 'card ' + color(card.suit) + sel, onclick: opts.onclick },
         card.rank + card.suit);
+      node.dataset.cid = card.id;
+      return node;
     }
 
+    // ---- FLIP animation: cards glide from old spot to new spot ----
+    const reduce = UI.reduceMotion();
+    function capturePositions() {
+      const map = new Map();
+      if (reduce) return map;
+      wrap.querySelectorAll('.card[data-cid]').forEach(node => {
+        map.set(node.dataset.cid, node.getBoundingClientRect());
+      });
+      return map;
+    }
+    function animateFrom(prev) {
+      if (reduce || prev.size === 0) return;
+      wrap.querySelectorAll('.card[data-cid]').forEach(node => {
+        const before = prev.get(node.dataset.cid);
+        if (!before) return;
+        const after = node.getBoundingClientRect();
+        const dx = before.left - after.left;
+        const dy = before.top - after.top;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+        node.style.transition = 'none';
+        node.style.transform = `translate(${dx}px, ${dy}px)`;
+        node.style.zIndex = '50';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          node.style.transition = 'transform 0.24s ease';
+          node.style.transform = 'translate(0,0)';
+          setTimeout(() => { node.style.zIndex = ''; node.style.transition = ''; }, 260);
+        }));
+      });
+    }
+
+    // rebuild = capture old positions, repaint, then animate movers into place
     function rebuild() {
+      const prev = capturePositions();
+      paint();
+      animateFrom(prev);
+    }
+
+    function paint() {
       UI.clear(wrap);
       // top bar
       wrap.appendChild(el('div', { class: 'gamebar' }, [

@@ -127,6 +127,8 @@ body {
 .game-tile .pay { font-size: 12px; opacity: 0.9; margin-top: 2px; }
 .tile-solitaire { background: linear-gradient(180deg, #3e6b45, #2f5233); }
 .tile-bejeweled { background: linear-gradient(180deg, #6b4f34, #52402b); }
+.tile-blackjack { background: linear-gradient(180deg, #2a2118, #52402b); }
+.tile-euchre    { background: linear-gradient(180deg, #345a3a, #2f5233); }
 .tile-bank      { background: linear-gradient(180deg, var(--sun), var(--sun-deep)); color: var(--bark); }
 .tile-bank .name, .tile-bank .pay { color: var(--bark); }
 .tile-locked    { background: linear-gradient(180deg, #9a9a8a, #7d7d6e); cursor: default; }
@@ -179,14 +181,24 @@ input[type=range] { flex: 1; accent-color: var(--forest); }
 .pile { position: relative; min-height: 60px; }
 .pile .card { position: absolute; left: 0; right: 0; }
 
-/* ---------- bejeweled ---------- */
-.gem-grid { display: grid; gap: 4px; margin: 0 auto; touch-action: none; }
-.gem {
-  aspect-ratio: 1; border-radius: 12px; display: flex; align-items: center; justify-content: center;
-  font-size: clamp(18px, 7vw, 30px); cursor: pointer; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.15);
-  transition: transform 0.1s;
+/* ---------- Mom's Match (animated match-3) ---------- */
+.gem-board { max-width: 440px; margin: 0 auto; }
+.gem-grid-anim {
+  position: relative; width: 100%; aspect-ratio: 1; touch-action: none; overflow: hidden;
+  border-radius: 16px; background: rgba(0,0,0,0.04); padding: 0;
 }
-.gem.sel { outline: 3px solid #fff; transform: scale(0.9); }
+.gem-tile {
+  position: absolute; top: 0; left: 0;
+  box-sizing: border-box; border: 2px solid rgba(255,255,255,0.15); border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(16px, 6vw, 28px); cursor: pointer;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.18);
+  will-change: transform, opacity;
+}
+.gem-tile.sel { outline: 3px solid #fff; z-index: 3; box-shadow: 0 0 12px rgba(255,255,255,0.7); }
+@media (prefers-reduced-motion: reduce) {
+  .gem-tile { transition: none !important; }
+}
 
 .center { text-align: center; }
 .spacer { height: 8px; }
@@ -261,3 +273,45 @@ input[type=range] { flex: 1; accent-color: var(--forest); }
 .brand { gap: 4px; }
 .brand-face { display: inline-flex; align-items: center; }
 .brand-face svg { display: block; border-radius: 50%; background: rgba(255,255,255,0.25); }
+
+
+/* ---------- Blackjack ---------- */
+.bj-board { padding: 14px 10px; }
+.bj-seat { margin-bottom: 18px; }
+.bj-label { font-weight: 800; color: var(--soil); margin-bottom: 6px; text-align: center; }
+.bj-cards { display: flex; gap: 6px; justify-content: center; min-height: 84px; flex-wrap: wrap; }
+.bj-card {
+  width: 58px; height: 82px; border-radius: 8px; background: #fff; border: 1px solid #cbb993;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 20px; box-shadow: 0 2px 5px var(--shadow);
+}
+.bj-card.red { color: #b23b2e; }
+.bj-card.black { color: #2a2118; }
+.bj-card.back { background: repeating-linear-gradient(45deg, var(--forest), var(--forest) 6px, var(--forest-2) 6px, var(--forest-2) 12px); }
+@keyframes dealIn { from { transform: translateY(-24px) rotate(-6deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bj-card { animation: none !important; } }
+
+
+/* ---------- Euchre ---------- */
+.eu-table { background: #2f5233; border-radius: 18px; margin: 10px; padding: 10px; color: var(--cream); }
+.eu-mid { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 6px 0; }
+.eu-seat { background: rgba(0,0,0,0.22); border-radius: 12px; padding: 6px 8px; text-align: center; min-width: 64px; }
+.eu-seat.active { outline: 2px solid var(--sun); box-shadow: 0 0 10px rgba(232,198,107,0.5); }
+.eu-name { font-weight: 800; font-size: 12px; }
+.eu-tricks { font-size: 12px; opacity: 0.9; }
+.eu-center { flex: 1; text-align: center; }
+.eu-trump, .eu-kitty { font-weight: 800; font-size: 13px; color: var(--sun); margin-bottom: 4px; }
+.eu-trick { display: flex; gap: 4px; justify-content: center; min-height: 56px; flex-wrap: wrap; }
+.eu-msg { text-align: center; font-weight: 700; color: var(--soil); padding: 4px 12px; min-height: 20px; }
+.eu-hand { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
+.eu-card {
+  min-width: 40px; height: 56px; background: #fff; border-radius: 7px; border: 1px solid #cbb993;
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px;
+  box-shadow: 0 2px 4px var(--shadow); padding: 0 6px;
+}
+.eu-card.small { height: 48px; min-width: 34px; font-size: 14px; flex-direction: column; gap: 0; }
+.eu-card .eu-mini { font-size: 9px; color: #999; font-weight: 700; }
+.eu-card.red { color: #b23b2e; }
+.eu-card.black { color: #2a2118; }
+.eu-card.playable { cursor: pointer; outline: 2px solid var(--leaf); transform: translateY(-3px); transition: transform 0.12s; }
+.eu-card.dim { opacity: 0.45; }

@@ -72,8 +72,9 @@
       el('div', { class: 'game-grid' }, [
         gameTile('tile-solitaire', '🃏', 'Solitaire', `Buy-in ${fmt(t.buyIn)}`, () => startGame('solitaire'), !canPlay),
         gameTile('tile-bejeweled', '🍷', "Mom's Match", `Buy-in ${fmt(t.buyIn)}`, () => startGame('bejeweled'), !canPlay),
+        gameTile('tile-blackjack', '🂡', 'Blackjack', `Buy-in ${fmt(t.buyIn)}`, () => startGame('blackjack'), !canPlay),
+        gameTile('tile-euchre', '🎴', 'Euchre', `Buy-in ${fmt(t.buyIn)}`, () => startGame('euchre'), !canPlay),
         gameTile('tile-bank', '🏦', "Mama's Bank", 'Save / Loans', () => go('bank')),
-        gameTile('tile-solitaire', '🃏', 'Blackjack', 'Coming soon', null, true),
       ]),
 
       !canPlay ? el('p', { class:'warn center' }, `You need ${fmt(t.buyIn)} to play a game. Skip a week to collect your paycheck!`) : null,
@@ -145,6 +146,8 @@
   function go(where) {
     if (where === 'solitaire') mount(screen([ Solitaire.render(state.run, renderHub, onGameEnd) ]));
     else if (where === 'bejeweled') mount(screen([ Bejeweled.render(state.run, renderHub, onGameEnd) ]));
+    else if (where === 'blackjack') mount(screen([ Blackjack.render(state.run, renderHub, onGameEnd) ]));
+    else if (where === 'euchre') mount(screen([ Euchre.render(state.run, renderHub, onGameEnd) ]));
     else if (where === 'bank') mount(screen([ Bank.render(state.run, renderHub, () => { saveAll(); afterBank(); }) ]));
   }
 

@@ -12,6 +12,7 @@
 
     let investAmt = 0;
     let repayAmt = 0;
+    const prevVals = {};   // remembers last shown amount per box, to animate count-ups
 
     const wrap = el('div', { class: 'content' });
 
@@ -29,12 +30,12 @@
       // --- Money summary ---
       wrap.appendChild(el('div', { class: 'panel' }, [
         el('div', { class: 'row', style: { marginBottom: '6px' } }, [
-          summaryBox('💵 Cash', fmt(run.cash), 'var(--forest)'),
-          summaryBox("📈 With Mama", fmt(run.invested), 'var(--sun-deep)'),
+          summaryBox('💵 Cash', run.cash, 'var(--forest)'),
+          summaryBox("📈 With Mama", Math.round(run.invested), 'var(--sun-deep)'),
         ]),
         el('div', { class: 'row' }, [
-          summaryBox('💳 You owe', fmt(run.debt), 'var(--danger)'),
-          summaryBox('🏆 Net Worth', fmt(Engine.netWorth(run)), 'var(--bark)'),
+          summaryBox('💳 You owe', Math.round(run.debt), 'var(--danger)'),
+          summaryBox('🏆 Net Worth', Engine.netWorth(run), 'var(--bark)'),
         ]),
         el('p', { class: 'muted', style: { marginTop: '10px' } },
           `Each week, your savings grow ${(t.investRate*100).toFixed(0)}% and any loan grows ${(t.debtRate*100).toFixed(0)}%. Playing games advances the weeks.`),
@@ -118,10 +119,17 @@
     rebuild();
     return wrap;
 
-    function summaryBox(label, value, color) {
+    // summaryBox animates its number from the previously shown value to the new one
+    function summaryBox(label, amount, color) {
+      const valNode = el('div', { style: { fontWeight: '900', fontSize: '20px', color } }, fmt(amount));
+      const prev = prevVals[label];
+      if (prev != null && prev !== amount) {
+        UI.countTo(valNode, prev, amount, { fmt, dur: 500 });
+      }
+      prevVals[label] = amount;
       return el('div', { style: { textAlign: 'center', padding: '6px' } }, [
         el('div', { class: 'muted' }, label),
-        el('div', { style: { fontWeight: '900', fontSize: '20px', color } }, value),
+        valNode,
       ]);
     }
     function rangeRow(min, max, val, onInput) {
