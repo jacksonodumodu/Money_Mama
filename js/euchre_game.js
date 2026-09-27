@@ -30,6 +30,9 @@
     let tricksWon = [0,0,0,0];
     let leader = 0;
     let msg = '';
+    let resolving = false;     // true during the pause after a trick: no taps
+    let closed = false;        // match over / left: ignore late timers
+    const later = (fn, ms) => setTimeout(() => { if (!closed) fn(); }, reduce ? 0 : ms);
 
     const wrap = el('div', null);
 
@@ -52,24 +55,46 @@
     }
 
     function sortHand(h) {
-      // simple stable sort by suit then rank for readability
-      h.sort((a,b) => a.suit === b.suit ? C.RANKS.indexOf(a.rank)-C.RANKS.indexOf(b.rank) : C.SUITS.indexOf(a.suit)-C.SUITS.indexOf(b.suit));
+      // group by suit (the left bower moves in with trump once trump is set),
+      // trump first, strongest cards first
+      const suitOf = (c) => trump ? C.effectiveSuit(c, trump) : c.suit;
+      const order = (s) => (trump && s === trump) ? -1 : C.SUITS.indexOf(s);
+      const str = (c) => trump ? C.cardStrength(c, trump, suitOf(c)) : C.RANKS.indexOf(c.rank);
+      h.sort((a, b) => suitOf(a) === suitOf(b) ? str(b) - str(a) : order(suitOf(a)) - order(suitOf(b)));
     }
 
     // ---- Bidding ----
     function orderUp(seat, suit, alone) {
+      if (closed) return;
       trump = suit; maker = seat;
-      // dealer picks up the kitty and discards worst card
+      // round 1: the dealer picks up the turned card and discards one
       if (phase === 'bid1') {
         hands[dealer].push(kitty);
+        if (dealer === 0) {
+          phase = 'discard';
+          sortHand(hands[0]);
+          msg = `${SEAT_NAMES[seat]} called ${suit}. You picked up the ${kitty.rank}${kitty.suit} — tap a card to discard.`;
+          rebuild();
+          return;
+        }
         discardWorst(dealer, trump);
       }
+      startPlay(`${SEAT_NAMES[seat]} called ${suit} as trump!`);
+    }
+
+    function humanDiscard(card) {
+      if (closed || phase !== 'discard') return;
+      hands[0] = hands[0].filter(c => c.id !== card.id);
+      startPlay(`You discarded the ${card.rank}${card.suit}. ${trump} is trump.`);
+    }
+
+    function startPlay(message) {
       phase = 'play';
       leader = (dealer + 1) % 4;
       turn = leader;
       currentTrick = [];
       sortHand(hands[0]);
-      msg = `${SEAT_NAMES[seat]} called ${suit} as trump!`;
+      msg = message;
       rebuild();
       maybeAiPlay();
     }
@@ -85,6 +110,7 @@
     }
 
     function passBid(seat) {
+      if (closed) return;
       if (phase === 'bid1') {
         if (seat === dealer) { phase = 'bid2'; turn = (dealer + 1) % 4; msg = 'All passed. Name a different suit or pass.'; }
         else turn = (turn + 1) % 4;
@@ -93,7 +119,7 @@
           msg = 'Everyone passed. Redealing…';
           rebuild();
           dealer = (dealer + 1) % 4;
-          setTimeout(dealHand, reduce ? 0 : 700);
+          later(dealHand, 700);
           return;
         } else turn = (turn + 1) % 4;
       }
@@ -105,7 +131,7 @@
       if (phase !== 'bid1' && phase !== 'bid2') return;
       if (turn === 0) return; // your turn; wait for UI
       const seat = turn;
-      setTimeout(() => {
+      later(() => {
         if (phase === 'bid1') {
           const s = C.handStrength(hands[seat], kitty.suit);
           // consider that dealer (their team?) picks up the kitty
@@ -122,11 +148,12 @@
           if (best && bestStr >= 5.5) { orderUp(seat, best, false); return; }
           passBid(seat);
         }
-      }, reduce ? 0 : 600);
+      }, 600);
     }
 
     // ---- Trick play ----
     function playCard(seat, card) {
+      if (closed || resolving || phase !== 'play' || seat !== turn) return;
       const idx = hands[seat].findIndex(c => c.id === card.id);
       if (idx < 0) return;
       hands[seat].splice(idx, 1);
@@ -135,13 +162,15 @@
         const w = C.trickWinner(currentTrick, trump);
         tricksWon[w]++;
         msg = `${SEAT_NAMES[w]} wins the trick.`;
+        resolving = true;          // freeze input while everyone sees the trick
         rebuild();
-        setTimeout(() => {
+        later(() => {
+          resolving = false;
           currentTrick = [];
           leader = w; turn = w;
           if (hands[0].length === 0) { scoreHand(); }
           else { rebuild(); maybeAiPlay(); }
-        }, reduce ? 0 : 850);
+        }, 1000);
       } else {
         turn = (turn + 1) % 4;
         rebuild();
@@ -153,10 +182,10 @@
       if (phase !== 'play') return;
       if (turn === 0) return; // your move
       const seat = turn;
-      setTimeout(() => {
+      later(() => {
         const card = C.aiChooseCard(hands[seat], currentTrick, trump);
         playCard(seat, card);
-      }, reduce ? 0 : 650);
+      }, 650);
     }
 
     function scoreHand() {
@@ -177,6 +206,7 @@
     }
 
     function nextHandOrFinish() {
+      if (closed || phase !== 'handDone') return;
       if (handsPlayed >= HANDS_PER_GAME) { finishMatch(); return; }
       dealer = (dealer + 1) % 4;
       dealHand();
@@ -184,6 +214,8 @@
 
     // convert your team's points into winnings vs the buy-in
     function finishMatch() {
+      if (closed) return;
+      closed = true;               // pay out exactly once
       phase = 'matchDone';
       const mine = teamPoints[0], theirs = teamPoints[1];
       // each of your points is worth ~ buy-in/4; beating opponents adds a bonus
@@ -208,7 +240,7 @@
     }
 
     function seatBox(seat) {
-      const isTurn = (phase === 'play' || phase === 'bid1' || phase === 'bid2') && turn === seat;
+      const isTurn = !resolving && (phase === 'play' || phase === 'bid1' || phase === 'bid2' || (phase === 'discard' && seat === 0)) && turn === seat;
       return el('div', { class: 'eu-seat' + (isTurn ? ' active' : '') }, [
         el('div', { class: 'eu-name' }, SEAT_NAMES[seat] + (teamOf(seat) === 0 ? ' 💚' : '') + (maker === seat ? ' ⭐' : '')),
         el('div', { class: 'eu-tricks' }, '🂠 ' + tricksWon[seat]),
@@ -259,16 +291,19 @@
 
       // your hand
       const yourLed = currentTrick.length ? currentTrick[0].card : null;
-      const legal = (phase === 'play' && turn === 0) ? C.legalPlays(hands[0], yourLed, trump) : [];
+      const myTurn = phase === 'play' && turn === 0 && !resolving;
+      const legal = myTurn ? C.legalPlays(hands[0], yourLed, trump) : [];
       const legalIds = new Set(legal.map(c => c.id));
       const handRow = el('div', { class: 'eu-hand' }, hands[0].map(card => {
-        const playable = phase === 'play' && turn === 0 && legalIds.has(card.id);
+        if (phase === 'discard') return cardBtn(card, { playable: true, onclick: () => humanDiscard(card) });
+        const playable = myTurn && legalIds.has(card.id);
         return cardBtn(card, {
           playable,
-          dim: phase === 'play' && turn === 0 && !legalIds.has(card.id),
+          dim: myTurn && !legalIds.has(card.id),
           onclick: playable ? () => playCard(0, card) : null,
         });
       }));
+      if (myTurn) ctrl.appendChild(el('p', { class: 'muted center' }, legal.length < hands[0].length ? 'Your turn — you must follow suit (raised cards).' : 'Your turn — tap a card to play it.'));
       ctrl.appendChild(el('div', { class:'muted center', style:{marginTop:'6px'} }, 'Your hand'));
       ctrl.appendChild(handRow);
       wrap.appendChild(ctrl);
@@ -285,12 +320,13 @@
     }
 
     function confirmExit() {
+      if (closed) return;
       UI.modal({
         title: 'Leave the game?',
         bodyNodes: [ Mama.speech("Leaving now forfeits this match's stake, sweetie. Sure?", 'stern') ],
         buttons: [
           { label: 'Keep playing', class: 'gold' },
-          { label: 'Forfeit & leave', class: 'wood', onClick: (c) => { c(); const res = Engine.settleGame(run, 0); onEarn(res, { title: 'You left the table', detail: 'No winnings this match.' }); } },
+          { label: 'Forfeit & leave', class: 'wood', onClick: (c) => { c(); if (closed) return; closed = true; const res = Engine.settleGame(run, 0); onEarn(res, { title: 'You left the table', detail: 'No winnings this match.' }); } },
         ],
       });
     }

@@ -39,23 +39,26 @@
   // doesn't feel like a jarring hard swap. Respects reduce-motion settings.
   function mount(node) {
     const app = document.getElementById('app');
-    if (reduceMotion() || !app.firstChild) {
-      clear(app); app.appendChild(node);
-      return;
-    }
-    const old = app.firstChild;
+    // Any open modal belongs to the old screen — drop it immediately.
+    app.querySelectorAll(':scope > .overlay').forEach(o => o.remove());
+    if (reduceMotion()) { clear(app); app.appendChild(node); return; }
+    // EVERY existing screen fades out (not just the first child — fast taps
+    // used to leave a stale screen stuck in the page).
+    const olds = Array.from(app.children);
+    olds.forEach(old => old.classList.add('screen-exit'));
     node.classList.add('screen-enter');
-    // fade the old one out, then remove
-    old.classList.add('screen-exit');
     app.appendChild(node);
-    // next frame: trigger enter
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        node.classList.add('screen-enter-active');
-      });
-    });
-    setTimeout(() => { if (old.parentNode === app) app.removeChild(old); node.classList.remove('screen-enter', 'screen-enter-active'); }, 320);
+    requestAnimationFrame(() => requestAnimationFrame(() => node.classList.add('screen-enter-active')));
+    setTimeout(() => {
+      olds.forEach(old => { if (old.parentNode === app) app.removeChild(old); });
+      node.classList.remove('screen-enter', 'screen-enter-active');
+    }, 320);
   }
+
+  // Games call this whenever money moves mid-game; app.js wires it up to
+  // save progress and refresh the balance in the top bar.
+  const hooks = { moneyChanged: null };
+  function moneyChanged() { if (hooks.moneyChanged) hooks.moneyChanged(); }
 
   // Animate a number counting up/down inside a node (money feels alive).
   function countTo(node, from, to, opts) {
@@ -63,6 +66,7 @@
     const fmt = opts.fmt || ((n) => Math.round(n));
     const dur = reduceMotion() ? 0 : (opts.dur || 600);
     if (dur === 0) { node.textContent = fmt(to); return; }
+    node.textContent = fmt(from);   // start from the old value (no flash of the final number)
     const start = performance.now();
     function frame(now) {
       const p = Math.min(1, (now - start) / dur);
@@ -115,5 +119,5 @@
     return wrap.firstElementChild;
   }
 
-  window.UI = { el, clear, mount, modal, lineChart, countTo, reduceMotion };
+  window.UI = { el, clear, mount, modal, lineChart, countTo, reduceMotion, hooks, moneyChanged };
 })();

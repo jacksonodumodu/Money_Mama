@@ -1,5 +1,5 @@
 /* =========================================================
-   Money Grove — forest greens & browns theme
+   Money Mama — forest greens & browns theme
 ========================================================= */
 :root {
   --bark:        #3b2a1a;   /* dark brown */
@@ -131,6 +131,7 @@ body {
 .tile-euchre    { background: linear-gradient(180deg, #345a3a, #2f5233); }
 .tile-bank      { background: linear-gradient(180deg, var(--sun), var(--sun-deep)); color: var(--bark); }
 .tile-bank .name, .tile-bank .pay { color: var(--bark); }
+.game-tile.wide { grid-column: span 2; }
 .tile-locked    { background: linear-gradient(180deg, #9a9a8a, #7d7d6e); cursor: default; }
 .tile-locked:active { transform: none; box-shadow: 0 5px 0 rgba(0,0,0,0.25); }
 
@@ -180,6 +181,9 @@ input[type=range] { flex: 1; accent-color: var(--forest); }
 .card.sel { outline: 3px solid var(--sun); }
 .pile { position: relative; min-height: 60px; }
 .pile .card { position: absolute; left: 0; right: 0; }
+/* invisible, card-sized: makes each pile exactly as tall as its fanned cards */
+.pile .card.pile-spacer, .pile .card.empty { position: relative; }
+.pile .card.pile-spacer { visibility: hidden; pointer-events: none; box-shadow: none; }
 
 /* ---------- Mom's Match (animated match-3) ---------- */
 .gem-board { max-width: 440px; margin: 0 auto; }
@@ -246,8 +250,9 @@ input[type=range] { flex: 1; accent-color: var(--forest); }
 @keyframes screenExit { to { opacity: 0; transform: translateY(-6px); } }
 #app { position: relative; }
 
-/* Gentle entrance for panels/tiles */
-.panel, .game-tile, .goal-card { animation: rise 0.32s ease both; }
+/* Gentle entrance for panels/tiles — only while a screen is first appearing,
+   so tapping buttons inside a screen doesn't make everything re-animate */
+.screen-enter .panel, .screen-enter .game-tile, .screen-enter .goal-card { animation: rise 0.32s ease both; }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (prefers-reduced-motion: reduce) {
@@ -315,3 +320,25 @@ input[type=range] { flex: 1; accent-color: var(--forest); }
 .eu-card.black { color: #2a2118; }
 .eu-card.playable { cursor: pointer; outline: 2px solid var(--leaf); transform: translateY(-3px); transition: transform 0.12s; }
 .eu-card.dim { opacity: 0.45; }
+
+/* loan amount picker */
+.loan-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+.loan-options .btn.small { width: 100%; padding: 10px 4px; background: #fff; color: var(--danger); border: 2px solid #e2b7ac; box-shadow: none; }
+.loan-options .btn.small.picked { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+
+/* ---------- Top bar: never wrap, fit narrow phones ---------- */
+.topbar { gap: 8px; }
+.brand { white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+.stat-pills { flex: 0 0 auto; }
+.pill { white-space: nowrap; }
+@media (max-width: 440px) {
+  .topbar { padding: 10px 10px; }
+  .brand { font-size: 16px; letter-spacing: 0; }
+  .stat-pills { gap: 5px; }
+  .pill { padding: 4px 7px; font-size: 12.5px; gap: 3px; }
+}
+/* very narrow phones or big numbers: keep Mama's face, drop the words */
+@media (max-width: 360px) {
+  .brand-text { display: none; }
+}

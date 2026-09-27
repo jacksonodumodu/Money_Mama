@@ -1,38 +1,40 @@
 /* =========================================================
    Money Mama — "Mom's Match" match-3 (animated)
-   Swap adjacent tiles, match 3+, cascades. Score -> winnings.
-   Suburban-mom themed tokens (wine, coffee, soccer, etc.).
+   Tap two neighbouring tiles OR swipe a tile toward a neighbour
+   to swap. Match 3+, cascades. Score -> winnings.
 
-   Animation approach (dependency-free):
-   Each cell holds a persistent tile object { id, gem } rendered as an
-   absolutely-positioned element. Moving a tile just updates its
-   transform (translate) and CSS transitions it. Matches scale to 0
-   (pop), survivors fall into gaps, and fresh tiles drop from above —
-   with a small stagger for a natural cascade. Respects reduce-motion.
+   Input: ONE pointer handler on the board works out which cell was
+   touched from the touch position. (Per-tile handlers went stale as
+   tiles moved, which broke selection.)
+
+   Animation: each tile is a persistent absolutely-positioned element;
+   moving it = changing its transform, which CSS transitions. Matches
+   pop, survivors fall, new tiles drop in from above. If the board ever
+   has no possible move, it reshuffles. Respects reduce-motion.
 ========================================================= */
 (function () {
   const { el } = UI;
   const GEMS = ['🍷', '☕', '⚽', '🛒', '💐', '🧁']; // wine, coffee, soccer, groceries, flowers, cupcake
-  const PALETTE = ['#7a3b2e','#6b4f34','#3e6b45','#8a6d4b','#a85a8a','#c99b39'];
+  const PALETTE = ['#7a3b2e', '#6b4f34', '#3e6b45', '#8a6d4b', '#a85a8a', '#c99b39'];
   const SIZE = 7;
   const MOVES = 12;
 
   function randGemVal() { return Math.floor(Math.random() * GEMS.length); }
 
-  // ---- pure board logic (unchanged, tested) ----
+  // ---- pure board logic (works on a grid of gem values) ----
   function findMatchesVals(vals) {
     const matched = new Set();
     for (let r = 0; r < SIZE; r++) {
       let run = 1;
       for (let c = 1; c <= SIZE; c++) {
-        if (c < SIZE && vals[r][c] === vals[r][c-1] && vals[r][c] != null) run++;
+        if (c < SIZE && vals[r][c] != null && vals[r][c] === vals[r][c - 1]) run++;
         else { if (run >= 3) for (let k = c - run; k < c; k++) matched.add(r + ',' + k); run = 1; }
       }
     }
     for (let c = 0; c < SIZE; c++) {
       let run = 1;
       for (let r = 1; r <= SIZE; r++) {
-        if (r < SIZE && vals[r][c] === vals[r-1][c] && vals[r][c] != null) run++;
+        if (r < SIZE && vals[r][c] != null && vals[r][c] === vals[r - 1][c]) run++;
         else { if (run >= 3) for (let k = r - run; k < r; k++) matched.add(k + ',' + c); run = 1; }
       }
     }
@@ -41,95 +43,127 @@
   function areAdjacent(a, b) {
     return (a.r === b.r && Math.abs(a.c - b.c) === 1) || (a.c === b.c && Math.abs(a.r - b.r) === 1);
   }
+  // Is there at least one swap that makes a match?
+  function hasPossibleMove(vals) {
+    const g = vals.map(row => row.slice());
+    for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+      for (const [dr, dc] of [[0, 1], [1, 0]]) {
+        const r2 = r + dr, c2 = c + dc;
+        if (r2 >= SIZE || c2 >= SIZE) continue;
+        [g[r][c], g[r2][c2]] = [g[r2][c2], g[r][c]];
+        const found = findMatchesVals(g).size > 0;
+        [g[r][c], g[r2][c2]] = [g[r2][c2], g[r][c]];
+        if (found) return true;
+      }
+    }
+    return false;
+  }
+  // A fresh grid of values with no matches but at least one move.
+  function freshVals() {
+    let v;
+    do {
+      v = Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, randGemVal));
+    } while (findMatchesVals(v).size > 0 || !hasPossibleMove(v));
+    return v;
+  }
 
   function render(run, onExit, onEarn) {
-    // board holds tile objects: { id, gem } (or null while resolving)
     let nextId = 1;
     const newTile = (gem) => ({ id: nextId++, gem: gem == null ? randGemVal() : gem });
-
-    // build with no starting matches
-    let board;
-    do {
-      board = [];
-      for (let r = 0; r < SIZE; r++) { const row = []; for (let c = 0; c < SIZE; c++) row.push(newTile()); board.push(row); }
-    } while (findMatchesVals(board.map(row => row.map(t => t.gem))).size > 0);
+    let board = freshVals().map(row => row.map(g => newTile(g)));
 
     let sel = null;
     let score = 0;
     let movesLeft = MOVES;
     let busy = false;
+    let finished = false;
 
     const wrap = el('div', null);
     let gridEl = null;
-    const tileNodes = new Map(); // id -> DOM node
+    const tileNodes = new Map(); // tile id -> DOM node
     const reduce = UI.reduceMotion();
-    const STEP = reduce ? 0 : 1;   // animation multiplier
-
-    // cell geometry is percentage-based so it scales with the grid
+    const STEP = reduce ? 0 : 1;
     const cellPct = 100 / SIZE;
 
-    function valsOf() { return board.map(row => row.map(t => (t ? t.gem : null))); }
+    const valsOf = () => board.map(row => row.map(t => (t ? t.gem : null)));
+    function updateScore() {
+      const s = wrap.querySelector('.score');
+      if (s) s.textContent = `Score ${score} · Moves ${movesLeft}`;
+    }
 
-    function scoreNode() { return wrap.querySelector('.score'); }
-    function updateScore() { const s = scoreNode(); if (s) s.textContent = `Score ${score} · Moves ${movesLeft}`; }
-
-    // position a tile node at its (r,c) via transform
     function place(node, r, c, opts) {
       opts = opts || {};
       node.style.transform = `translate(${c * 100}%, ${r * 100}%) scale(${opts.scale != null ? opts.scale : 1})`;
       node.style.opacity = opts.opacity != null ? opts.opacity : 1;
     }
-
+    function styleTile(node, gem) {
+      node.textContent = GEMS[gem];
+      node.style.background = PALETTE[gem % PALETTE.length];
+    }
     function makeTileNode(tile, r, c) {
-      const node = el('div', {
-        class: 'gem-tile',
-        style: { width: cellPct + '%', height: cellPct + '%', background: PALETTE[tile.gem % PALETTE.length] },
-      }, GEMS[tile.gem]);
-      node.addEventListener('click', () => onCellTap(r, c));
-      node.dataset.id = tile.id;
+      const node = el('div', { class: 'gem-tile', style: { width: cellPct + '%', height: cellPct + '%' } });
+      styleTile(node, tile.gem);
       place(node, r, c);
       tileNodes.set(tile.id, node);
       return node;
     }
 
-    // full initial paint of the grid (creates persistent nodes)
-    function paintGrid() {
-      gridEl = el('div', { class: 'gem-grid-anim' });
-      for (let r = 0; r < SIZE; r++) {
-        for (let c = 0; c < SIZE; c++) {
-          const t = board[r][c];
-          gridEl.appendChild(makeTileNode(t, r, c));
-        }
-      }
-      return gridEl;
-    }
-
-    // re-bind click handlers + reposition every existing tile to its board slot
     function syncPositions(animate) {
-      for (let r = 0; r < SIZE; r++) {
-        for (let c = 0; c < SIZE; c++) {
-          const t = board[r][c];
-          if (!t) continue;
-          const node = tileNodes.get(t.id);
-          if (!node) continue;
-          node.style.transition = animate && !reduce ? 'transform 0.22s ease' : 'none';
-          // refresh handler to current coords
-          node.onclick = () => onCellTap(r, c);
-          place(node, r, c);
-        }
+      for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+        const t = board[r][c];
+        const node = t && tileNodes.get(t.id);
+        if (!node) continue;
+        node.style.transition = animate && !reduce ? 'transform 0.22s ease, opacity 0.2s ease' : 'none';
+        place(node, r, c);
       }
     }
 
     function setSelected() {
-      tileNodes.forEach((node) => node.classList.remove('sel'));
-      if (sel) {
-        const t = board[sel.r][sel.c];
-        if (t) { const n = tileNodes.get(t.id); if (n) n.classList.add('sel'); }
+      tileNodes.forEach(node => node.classList.remove('sel'));
+      if (sel && board[sel.r][sel.c]) {
+        const n = tileNodes.get(board[sel.r][sel.c].id);
+        if (n) n.classList.add('sel');
       }
     }
 
+    // ---- input: one handler for the whole board (tap-tap or swipe) ----
+    function cellAt(clientX, clientY) {
+      const rect = gridEl.getBoundingClientRect();
+      const c = Math.floor(((clientX - rect.left) / rect.width) * SIZE);
+      const r = Math.floor(((clientY - rect.top) / rect.height) * SIZE);
+      if (r < 0 || c < 0 || r >= SIZE || c >= SIZE) return null;
+      return { r, c };
+    }
+    let press = null; // { cell, x, y, swiped }
+    function onDown(e) {
+      if (busy || finished || movesLeft <= 0) return;
+      const cell = cellAt(e.clientX, e.clientY);
+      if (!cell) return;
+      press = { cell, x: e.clientX, y: e.clientY, swiped: false };
+      try { gridEl.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    function onMove(e) {
+      if (!press || press.swiped) return;
+      const dx = e.clientX - press.x, dy = e.clientY - press.y;
+      const cellPx = gridEl.getBoundingClientRect().width / SIZE;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < cellPx * 0.35) return;
+      press.swiped = true;
+      const a = press.cell;
+      const b = Math.abs(dx) > Math.abs(dy)
+        ? { r: a.r, c: a.c + (dx > 0 ? 1 : -1) }
+        : { r: a.r + (dy > 0 ? 1 : -1), c: a.c };
+      if (b.r < 0 || b.c < 0 || b.r >= SIZE || b.c >= SIZE) return;
+      sel = null; setSelected();
+      doSwap(a, b);
+    }
+    function onUp(e) {
+      if (!press) return;
+      const p = press; press = null;
+      if (!p.swiped) onCellTap(p.cell.r, p.cell.c);
+    }
+
     function onCellTap(r, c) {
-      if (busy || movesLeft <= 0) return;
+      if (busy || finished || movesLeft <= 0) return;
       if (!sel) { sel = { r, c }; setSelected(); return; }
       if (sel.r === r && sel.c === c) { sel = null; setSelected(); return; }
       if (areAdjacent(sel, { r, c })) { const a = sel; sel = null; setSelected(); doSwap(a, { r, c }); }
@@ -141,14 +175,13 @@
     }
 
     async function doSwap(a, b) {
+      if (busy || finished) return;
       busy = true;
       swapInBoard(a, b);
       syncPositions(true);
       await wait(230 * STEP);
-      const matches = findMatchesVals(valsOf());
-      if (matches.size === 0) {
-        // invalid: swap back with a little animation
-        swapInBoard(a, b);
+      if (findMatchesVals(valsOf()).size === 0) {
+        swapInBoard(a, b);           // not a match: slide back, no move spent
         syncPositions(true);
         await wait(230 * STEP);
         busy = false;
@@ -157,61 +190,67 @@
       movesLeft--;
       updateScore();
       await resolveCascades();
+      if (!hasPossibleMove(valsOf())) await reshuffle();
       busy = false;
-      if (movesLeft <= 0) setTimeout(finish, 300);
+      if (movesLeft <= 0) setTimeout(finish, 400);
     }
 
-    // pop matches, drop survivors, spawn new — repeat for cascades
     async function resolveCascades() {
       let loop = 0;
       while (loop++ < 30) {
         const matches = findMatchesVals(valsOf());
         if (matches.size === 0) break;
-        score += matches.size * 10 * loop;
+        score += matches.size * 10 * loop;    // cascades are worth more
         updateScore();
-
-        // 1) pop matched tiles
+        // 1) pop
         for (const key of matches) {
           const [r, c] = key.split(',').map(Number);
           const t = board[r][c];
-          if (t) {
-            const node = tileNodes.get(t.id);
-            if (node) { node.style.transition = reduce ? 'none' : 'transform 0.2s ease, opacity 0.2s ease'; place(node, r, c, { scale: 0, opacity: 0 }); }
-            board[r][c] = null;
-          }
+          const node = t && tileNodes.get(t.id);
+          if (node) { node.style.transition = reduce ? 'none' : 'transform 0.2s ease, opacity 0.2s ease'; place(node, r, c, { scale: 0, opacity: 0 }); }
+          board[r][c] = null;
         }
         await wait(200 * STEP);
-        // delete the popped tiles' DOM nodes (their board slots are now null)
         cleanupOrphanNodes();
-
-        // 2) gravity: for each column, let survivors fall, spawn new on top
+        // 2) gravity + refill from above
         for (let c = 0; c < SIZE; c++) {
           const survivors = [];
           for (let r = SIZE - 1; r >= 0; r--) if (board[r][c]) survivors.push(board[r][c]);
-          // place survivors at bottom
-          let idx = 0;
+          for (let r = SIZE - 1, i = 0; r >= 0; r--, i++) board[r][c] = survivors[i] || null;
+          let spawned = 0;
           for (let r = SIZE - 1; r >= 0; r--) {
-            if (idx < survivors.length) { board[r][c] = survivors[idx++]; }
-            else board[r][c] = null;
-          }
-          // fill remaining top cells with new tiles, spawned above the board
-          for (let r = SIZE - 1; r >= 0; r--) {
-            if (!board[r][c]) {
-              const t = newTile();
-              board[r][c] = t;
-              const node = makeTileNode(t, r, c);
-              // start above the visible grid, then fall in
-              node.style.transition = 'none';
-              node.style.transform = `translate(${c*100}%, ${(r - SIZE) * 100}%)`;
-              gridEl.appendChild(node);
-            }
+            if (board[r][c]) continue;
+            spawned++;
+            const t = newTile();
+            board[r][c] = t;
+            const node = makeTileNode(t, r, c);
+            node.style.transition = 'none';
+            node.style.transform = `translate(${c * 100}%, ${(r - SIZE) * 100}%)`;
+            gridEl.appendChild(node);
           }
         }
-        // next frame: animate everyone to their resting spot (the fall)
         await nextFrame();
         syncPositions(true);
         await wait(240 * STEP);
       }
+    }
+
+    // No moves left on the board: gently re-deal the gems in place.
+    async function reshuffle() {
+      const v = freshVals();
+      for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+        board[r][c].gem = v[r][c];
+        const node = tileNodes.get(board[r][c].id);
+        if (!node) continue;
+        node.style.transition = reduce ? 'none' : 'transform 0.18s ease';
+        place(node, r, c, { scale: 0.6 });
+        styleTile(node, v[r][c]);
+      }
+      const note = wrap.querySelector('.gem-note');
+      if (note) note.textContent = 'No moves left — Mama shuffled the board for you!';
+      await wait(180 * STEP);
+      syncPositions(true);
+      await wait(200 * STEP);
     }
 
     function cleanupOrphanNodes() {
@@ -222,13 +261,14 @@
       }
     }
 
-    // ---- payout (unchanged) ----
+    // ---- payout ----
     function payout() {
       const t = Engine.tierById(run.tierId);
-      const rate = t.buyIn / 300;
-      return { cash: Math.round(score * rate), score };
+      return { cash: Math.round(score * (t.buyIn / 300)), score };  // ~300 pts ≈ break-even
     }
     function finish() {
+      if (finished) return;           // never pay out twice
+      finished = true;
       const p = payout();
       const res = Engine.settleGame(run, p.cash);
       onEarn(res, {
@@ -236,12 +276,12 @@
         detail: `You scored ${p.score} points.`,
       });
     }
-
     function confirmExit() {
+      if (finished) return;
       const p = payout();
       UI.modal({
         title: 'Cash out?',
-        bodyNodes: [ Mama.speech(`You'll take home ${Engine.fmt(p.cash)} for ${p.score} points, dear.`, 'happy') ],
+        bodyNodes: [Mama.speech(`You'll take home ${Engine.fmt(p.cash)} for ${p.score} points, dear. You still have ${movesLeft} move${movesLeft === 1 ? '' : 's'} left.`, 'happy')],
         buttons: [
           { label: 'Cash out', class: 'gold', onClick: (cl) => { cl(); finish(); } },
           { label: 'Keep playing', class: 'ghost' },
@@ -249,25 +289,28 @@
       });
     }
 
-    // ---- helpers ----
     function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
     function nextFrame() { return new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res))); }
 
     // ---- initial paint ----
+    gridEl = el('div', { class: 'gem-grid-anim' });
+    for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) gridEl.appendChild(makeTileNode(board[r][c], r, c));
+    gridEl.addEventListener('pointerdown', onDown);
+    gridEl.addEventListener('pointermove', onMove);
+    gridEl.addEventListener('pointerup', onUp);
+    gridEl.addEventListener('pointercancel', () => { press = null; });
+
     wrap.appendChild(el('div', { class: 'gamebar' }, [
       el('button', { class: 'back', onclick: confirmExit }, '← Cash out'),
       el('div', { class: 'score' }, `Score ${score} · Moves ${movesLeft}`),
     ]));
-    const boardBox = el('div', { class: 'gem-board' }, paintGrid());
     wrap.appendChild(el('div', { style: { padding: '10px' } }, [
-      boardBox,
-      el('div', { class: 'spacer' }),
-      el('p', { class: 'muted center' }, 'Tap two neighboring tiles to swap. Line up 3+ to clear them and earn cash!'),
-      el('button', { class: 'btn gold', onclick: finish }, '💵 Cash out now'),
+      el('div', { class: 'gem-board' }, gridEl),
+      el('p', { class: 'muted center gem-note', style: { marginTop: '10px' } }, 'Swipe a tile toward its neighbour — or tap two neighbours — to swap. Line up 3+ to clear them!'),
+      el('button', { class: 'btn gold', onclick: confirmExit }, '💵 Cash out'),
     ]));
-
     return wrap;
   }
 
-  window.Bejeweled = { render, _test: { findMatchesVals, areAdjacent, SIZE } };
+  window.Bejeweled = { render, _test: { findMatchesVals, areAdjacent, hasPossibleMove, freshVals, SIZE } };
 })();

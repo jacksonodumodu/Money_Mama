@@ -23,6 +23,8 @@
       startCash: 80,
       income: 40,         // paycheck collected each week
       buyIn: 20,          // cost to play one game
+      loanSize: 200,      // default loan amount
+      loanOptions: [50, 100, 200, 500],
       investRate: 0.08,   // 8%/week savings growth — compounding felt fast
       debtRate: 0.10,     // 10%/week debt growth
       checkpoints: [250, 500, 1000],
@@ -35,6 +37,8 @@
       startCash: 300,
       income: 250,
       buyIn: 150,
+      loanSize: 1500,
+      loanOptions: [500, 1500, 3000, 7500],
       investRate: 0.05,
       debtRate: 0.12,
       checkpoints: [2500, 5000, 10000],
@@ -47,6 +51,8 @@
       startCash: 800,
       income: 1500,
       buyIn: 1200,
+      loanSize: 10000,
+      loanOptions: [2500, 10000, 25000, 50000],
       investRate: 0.04,
       debtRate: 0.15,
       checkpoints: [25000, 50000, 100000],
@@ -117,19 +123,35 @@
     return true;
   }
 
-  // Settle a game: the game reports its gross winnings (>= 0). Net vs the
-  // buy-in already spent is computed for messaging. Then a week ticks
-  // (paycheck + compounding), so playing always advances time.
+  // Close out a play session whose money has ALREADY moved (bets taken from
+  // cash, winnings paid into cash as they happened — e.g. blackjack hands).
+  // Ticks one week and reports how the session did overall.
+  function closeSession(run, returned, wagered) {
+    returned = Math.max(0, Math.round(returned));
+    wagered = Math.max(0, Math.round(wagered));
+    const tick = tickWeek(run);
+    const cp = checkAndBankCheckpoint(run);
+    const status = checkWinLose(run);
+    return { gross: returned, buyIn: wagered, net: returned - wagered, tick, checkpoint: cp, status };
+  }
+
+  // Settle a single-buy-in game: pay its gross winnings (>= 0) into cash,
+  // then close the session against the one buy-in that was paid.
   function settleGame(run, grossWinnings) {
     const t = tierById(run.tierId);
     grossWinnings = Math.max(0, Math.round(grossWinnings));
     run.cash += grossWinnings;
-    const net = grossWinnings - t.buyIn;   // how the round did vs the buy-in
-    const tick = tickWeek(run);
-    const cp = checkAndBankCheckpoint(run);
-    const status = checkWinLose(run);
-    return { gross: grossWinnings, buyIn: t.buyIn, net, tick, checkpoint: cp, status };
+    return closeSession(run, grossWinnings, t.buyIn);
   }
+
+  // Take / pay a bet mid-session (blackjack). Returns false if unaffordable.
+  function placeBet(run, amount) {
+    amount = Math.round(amount);
+    if (amount <= 0 || run.cash < amount) return false;
+    run.cash -= amount;
+    return true;
+  }
+  function payOut(run, amount) { run.cash += Math.max(0, Math.round(amount)); }
 
   // Skip a week without playing: just collect paycheck + compounding.
   // Often the SMART move — no buy-in risk, debt still needs managing.
@@ -190,8 +212,11 @@
     const t = tierById(run.tierId);
     const nw = netWorth(run);
     if (nw >= t.goal) { run.won = true; return 'won'; }
-    // Wiped: deep in debt, and can't even afford a buy-in to try to earn out.
-    if (nw < 0 && run.cash < t.buyIn && run.invested < 10) return 'wiped';
+    // Wiped (the debt trap): you owe more than everything you have AND the
+    // loan's weekly interest is at least your whole paycheck — working can
+    // no longer outrun it. (The old rule could never trigger, because the
+    // paycheck always covers a buy-in.)
+    if (nw < 0 && run.debt * t.debtRate >= t.income) return 'wiped';
     return 'playing';
   }
 
@@ -205,6 +230,8 @@
 
   function startTier(state, tierId) { state.run = freshRun(tierId); return state.run; }
   function completeTier(state) {
+    if (state.run.completed) return;   // never count the same win twice
+    state.run.completed = true;
     state.totalWins += 1;
     const next = Math.min(3, state.run.tierId + 1);
     state.highestTierUnlocked = Math.max(state.highestTierUnlocked, next);
@@ -215,7 +242,7 @@
     TIERS, tierById,
     load, save, defaultSave, freshRun,
     netWorth, tickWeek, skipWeek,
-    canAfford, payBuyIn, settleGame,
+    canAfford, payBuyIn, settleGame, closeSession, placeBet, payOut,
     invest, withdraw, borrow, repay,
     projectInvest, projectDebt,
     checkWinLose, restoreCheckpoint, checkAndBankCheckpoint,

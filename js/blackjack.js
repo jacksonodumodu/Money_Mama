@@ -2,11 +2,12 @@
    Money Mama — Blackjack
    Classic rules: hit / stand / double. Dealer draws to 17
    (stands on all 17). Blackjack pays 3:2. Bust = lose.
-   The buy-in is the table stake; winnings settle via the engine.
 
-   Lesson tie-in: even with perfect play the house has an edge —
-   good decisions help, but variance can still sting. Mama reminds
-   you not to chase losses.
+   Money: the table buy-in pays for your FIRST hand. Every extra
+   hand costs another bet straight from your cash, and doubling
+   down puts up a second bet. Winnings land in your cash the moment
+   a hand ends, so the balance at the top is always real. Leaving
+   the table ends the session (one week passes).
 ========================================================= */
 (function () {
   const { el } = UI;
@@ -17,7 +18,6 @@
   function color(s) { return RED.has(s) ? 'red' : 'black'; }
 
   function makeShoe() {
-    // 4 decks shuffled together (typical blackjack shoe)
     const shoe = [];
     let id = 0;
     for (let d = 0; d < 4; d++)
@@ -34,138 +34,148 @@
     let total = 0, aces = 0;
     for (const c of cards) {
       if (c.rank === 'A') { aces++; total += 11; }
-      else if (c.rank === 'K' || c.rank === 'Q' || c.rank === 'J' || c.rank === '10') total += 10;
+      else if (['K', 'Q', 'J', '10'].includes(c.rank)) total += 10;
       else total += parseInt(c.rank, 10);
     }
-    let soft = aces > 0;
     while (total > 21 && aces > 0) { total -= 10; aces--; }
-    soft = aces > 0 && total <= 21; // still holding an ace counted as 11
-    return { total, soft };
+    return { total, soft: aces > 0 };
   }
   function isBlackjack(cards) { return cards.length === 2 && handValue(cards).total === 21; }
 
+  // How much a finished hand returns to you, for a hand bet of `bet`.
+  // (Blackjack only happens on an undoubled 2-card hand.)
+  function handReturn(player, dealer, bet) {
+    const pv = handValue(player).total, dv = handValue(dealer).total;
+    const pBJ = isBlackjack(player), dBJ = isBlackjack(dealer);
+    if (pBJ && dBJ) return { outcome: 'push', back: bet };
+    if (pBJ) return { outcome: 'blackjack', back: Math.round(bet * 2.5) };
+    if (dBJ) return { outcome: 'lose', back: 0 };
+    if (pv > 21) return { outcome: 'lose', back: 0 };
+    if (dv > 21 || pv > dv) return { outcome: 'win', back: bet * 2 };
+    if (pv < dv) return { outcome: 'lose', back: 0 };
+    return { outcome: 'push', back: bet };
+  }
+
   function render(run, onExit, onEarn) {
     const t = Engine.tierById(run.tierId);
+    const BET = t.buyIn;
     const reduce = UI.reduceMotion();
     let shoe = makeShoe();
-    const draw = () => shoe.pop();
+    const draw = () => { if (shoe.length < 15) shoe = makeShoe(); return shoe.pop(); };
 
-    let player = [];
-    let dealer = [];
-    let phase = 'deal';   // deal | player | dealer | done
-    let doubled = false;
-    let outcome = null;   // 'win' | 'lose' | 'push' | 'blackjack'
-    let winnings = 0;     // gross returned to engine on cash-out
+    let wagered = BET;        // the buy-in already paid covers hand #1
+    let returned = 0;
+    let handsPlayed = 0;
+    let player = [], dealer = [];
+    let handBet = BET;
+    let phase = 'player';     // player | dealer | done
+    let outcome = null, lastBack = 0;
+    let closed = false;       // session over: ignore any late timers/taps
+    const seen = new Set();   // card ids already on screen (only new cards animate)
 
     const wrap = el('div', null);
 
-    function startRound() {
-      if (shoe.length < 20) shoe = makeShoe();
+    function dealHand() {
       player = [draw(), draw()];
       dealer = [draw(), draw()];
-      doubled = false; outcome = null;
+      handBet = BET;
+      outcome = null;
       phase = 'player';
-      // natural blackjack check
-      if (isBlackjack(player) || isBlackjack(dealer)) { phase = 'done'; settle(); }
+      if (isBlackjack(player) || isBlackjack(dealer)) { endHand(); return; }
       rebuild();
     }
 
+    function nextHand() {
+      if (closed || phase !== 'done') return;
+      if (!Engine.placeBet(run, BET)) { rebuild(); return; }   // can't afford it
+      wagered += BET;
+      UI.moneyChanged();
+      dealHand();
+    }
+
     function hit() {
-      if (phase !== 'player') return;
+      if (closed || phase !== 'player') return;
       player.push(draw());
-      if (handValue(player).total > 21) { phase = 'done'; settle(); }
+      if (handValue(player).total >= 21) { handValue(player).total > 21 ? endHand() : dealerPlay(); return; }
       rebuild();
     }
-    function stand() {
-      if (phase !== 'player') return;
-      dealerPlay();
-    }
+    function stand() { if (!closed && phase === 'player') dealerPlay(); }
     function double() {
-      if (phase !== 'player' || player.length !== 2) return;
-      doubled = true;
+      if (closed || phase !== 'player' || player.length !== 2) return;
+      if (!Engine.placeBet(run, BET)) return;                 // needs a second bet
+      wagered += BET;
+      handBet = BET * 2;
+      UI.moneyChanged();
       player.push(draw());
-      if (handValue(player).total > 21) { phase = 'done'; settle(); rebuild(); return; }
+      if (handValue(player).total > 21) { endHand(); return; }
       dealerPlay();
     }
 
     function dealerPlay() {
       phase = 'dealer';
       rebuild();
-      // dealer draws to 17 (stands on all 17)
-      const stepDraw = () => {
-        const v = handValue(dealer).total;
-        if (v < 17) { dealer.push(draw()); rebuild(); setTimeout(stepDraw, reduce ? 0 : 550); }
-        else { phase = 'done'; settle(); rebuild(); }
+      const step = () => {
+        if (closed) return;
+        if (handValue(dealer).total < 17) { dealer.push(draw()); rebuild(); setTimeout(step, reduce ? 0 : 550); }
+        else endHand();
       };
-      setTimeout(stepDraw, reduce ? 0 : 550);
+      setTimeout(step, reduce ? 0 : 550);
     }
 
-    // Decide outcome and compute gross winnings relative to the buy-in stake.
-    // Payouts (on the buy-in stake B):
-    //   blackjack  -> get back B + 1.5B  = 2.5B
-    //   win        -> get back B + B     = 2B  (double: 3B... i.e. stake+2B)
-    //   push       -> get back B
-    //   lose       -> get back 0
-    function settle() {
-      const B = t.buyIn;
-      const stake = doubled ? B * 2 : B;   // doubling risks a second buy-in worth
-      const pv = handValue(player).total;
-      const dv = handValue(dealer).total;
-      const pBJ = isBlackjack(player);
-      const dBJ = isBlackjack(dealer);
-
-      if (pBJ && !dBJ) { outcome = 'blackjack'; winnings = Math.round(B + 1.5 * B); }
-      else if (pBJ && dBJ) { outcome = 'push'; winnings = B; }
-      else if (pv > 21) { outcome = 'lose'; winnings = 0; }
-      else if (dv > 21) { outcome = 'win'; winnings = B + stake; }
-      else if (pv > dv) { outcome = 'win'; winnings = B + stake; }
-      else if (pv < dv) { outcome = 'lose'; winnings = 0; }
-      else { outcome = 'push'; winnings = B; }
-      // Note: on 'lose' with double, the extra stake loss is reflected because
-      // the player only ever paid one buy-in to the engine; doubling's extra
-      // risk/reward is modeled by paying stake (B or 2B) into winnings on a win
-      // and returning nothing on a loss. Net stays intuitive for the player.
+    function endHand() {
+      if (closed) return;
+      const r = handReturn(player, dealer, handBet);
+      outcome = r.outcome;
+      lastBack = r.back;
+      Engine.payOut(run, r.back);
+      returned += r.back;
+      handsPlayed++;
+      phase = 'done';
+      UI.moneyChanged();
+      rebuild();
     }
 
-    function cashOut() {
-      // if a round is mid-play, settle current state fairly (treat as stand)
-      if (phase === 'player') { /* fold current bet: count as loss of the round */ outcome = outcome || 'lose'; }
-      const res = Engine.settleGame(run, winnings);
+    // End the session: one week passes; report the whole table's result.
+    function leave() {
+      if (closed) return;
+      closed = true;
+      const res = Engine.closeSession(run, returned, wagered);
+      const net = returned - wagered;
       onEarn(res, {
-        title: outcome === 'blackjack' ? 'Blackjack! 🂡'
-             : outcome === 'win' ? 'You beat the dealer!'
-             : outcome === 'push' ? 'Push — a tie'
-             : 'Dealer wins this one',
-        detail: `Your ${handValue(player).total} vs dealer ${handValue(dealer).total}.`,
+        title: net > 0 ? 'You beat the house!' : net === 0 ? 'Broke even' : 'The house won this time',
+        detail: `${handsPlayed} hand${handsPlayed === 1 ? '' : 's'} played. You put in ${Engine.fmt(wagered)} and took back ${Engine.fmt(returned)}.`,
       });
     }
 
-    // ---- rendering ----
     function cardNode(card, hidden) {
-      if (hidden) return el('div', { class: 'bj-card back' });
-      const n = el('div', { class: 'bj-card ' + color(card.suit) }, card.rank + card.suit);
-      if (!reduce) { n.style.animation = 'dealIn 0.28s ease both'; }
+      const isNew = !seen.has(card.id + (hidden ? 'h' : ''));
+      seen.add(card.id + (hidden ? 'h' : ''));
+      const n = hidden
+        ? el('div', { class: 'bj-card back' })
+        : el('div', { class: 'bj-card ' + color(card.suit) }, card.rank + card.suit);
+      if (isNew && !reduce) n.style.animation = 'dealIn 0.28s ease both';
       return n;
     }
 
     function rebuild() {
+      if (closed) return;
       UI.clear(wrap);
       wrap.appendChild(el('div', { class: 'gamebar' }, [
         el('button', { class: 'back', onclick: confirmExit }, '← Leave table'),
-        el('div', { class: 'score' }, phase === 'player' ? 'Your move' : phase === 'dealer' ? 'Dealer…' : ''),
+        el('div', { class: 'score' }, `Bet ${Engine.fmt(handBet)} · Cash ${Engine.fmt(run.cash)}`),
       ]));
 
-      const hideHole = phase === 'player' || phase === 'deal';
-      const board = el('div', { class: 'bj-board' }, [
+      const hideHole = phase === 'player';
+      wrap.appendChild(el('div', { class: 'bj-board' }, [
         el('div', { class: 'bj-seat' }, [
           el('div', { class: 'bj-label' }, `Dealer${hideHole ? '' : ' — ' + handValue(dealer).total}`),
           el('div', { class: 'bj-cards' }, dealer.map((c, i) => cardNode(c, hideHole && i === 1))),
         ]),
         el('div', { class: 'bj-seat' }, [
-          el('div', { class: 'bj-label' }, `You — ${handValue(player).total}${handValue(player).soft ? ' (soft)' : ''}`),
+          el('div', { class: 'bj-label' }, `You — ${handValue(player).total}${handValue(player).soft && handValue(player).total < 21 ? ' (soft)' : ''}`),
           el('div', { class: 'bj-cards' }, player.map(c => cardNode(c, false))),
         ]),
-      ]);
+      ]));
 
       const controls = el('div', { style: { padding: '4px 10px 12px' } });
       if (phase === 'player') {
@@ -174,50 +184,55 @@
           el('button', { class: 'btn wood', onclick: stand }, 'Stand'),
         ]));
         if (player.length === 2) {
-          controls.appendChild(el('div', { style:{marginTop:'8px'} },
-            el('button', { class: 'btn gold', onclick: double }, `Double (risk another ${Engine.fmt(t.buyIn)})`)));
+          const canDouble = run.cash >= BET;
+          controls.appendChild(el('div', { style: { marginTop: '8px' } },
+            el('button', { class: 'btn gold', disabled: canDouble ? null : '', onclick: double },
+              canDouble ? `Double down (bet another ${Engine.fmt(BET)})` : `Double needs ${Engine.fmt(BET)} cash`)));
         }
-        controls.appendChild(el('p', { class:'muted center', style:{marginTop:'8px'} }, 'Get closer to 21 than the dealer — without going over.'));
+        controls.appendChild(el('p', { class: 'muted center', style: { marginTop: '8px' } }, 'Get closer to 21 than the dealer — without going over.'));
       } else if (phase === 'done') {
-        const cls = (outcome === 'win' || outcome === 'blackjack') ? 'good' : outcome === 'push' ? 'muted' : 'warn';
-        const msg = outcome === 'blackjack' ? 'Blackjack! Pays 3:2 💰'
-                  : outcome === 'win' ? 'You win! 🎉'
-                  : outcome === 'push' ? 'Push — your stake is returned.'
-                  : 'Dealer takes it. 😬';
-        controls.appendChild(el('p', { class: cls + ' center', style:{fontWeight:'800'} }, msg));
+        const good = outcome === 'win' || outcome === 'blackjack';
+        const msg = outcome === 'blackjack' ? `Blackjack! You get back ${Engine.fmt(lastBack)} 💰`
+                  : outcome === 'win' ? `You win! You get back ${Engine.fmt(lastBack)} 🎉`
+                  : outcome === 'push' ? `Push — your ${Engine.fmt(lastBack)} bet comes back.`
+                  : `Dealer takes your ${Engine.fmt(handBet)} bet. 😬`;
+        controls.appendChild(el('p', { class: (good ? 'good' : outcome === 'push' ? 'muted' : 'warn') + ' center', style: { fontWeight: '800' } }, msg));
+        const tableNet = returned - wagered;
         controls.appendChild(Mama.speech(
-          (outcome === 'win' || outcome === 'blackjack') ? "Beautiful play, sweetie!" :
-          outcome === 'push' ? "A tie — no harm done." :
-          "The house got that one, hon. Don't chase it — walk away ahead when you can.",
-          (outcome === 'win' || outcome === 'blackjack') ? 'proud' : outcome === 'push' ? 'happy' : 'worried'));
-        controls.appendChild(el('div', { class:'row', style:{marginTop:'8px'} }, [
-          el('button', { class:'btn', onclick: () => { startRound(); } }, 'Play hand again'),
-          el('button', { class:'btn gold', onclick: cashOut }, '💵 Take winnings & go'),
+          tableNet > 0 ? `You're up ${Engine.fmt(tableNet)} at this table, sweetie. Walking away while you're ahead is a real skill.`
+          : tableNet === 0 ? "You're even at this table. No harm done."
+          : `You're down ${Engine.fmt(-tableNet)} here, hon. Don't chase it — another hand costs another ${Engine.fmt(BET)}.`,
+          tableNet > 0 ? 'proud' : tableNet === 0 ? 'happy' : 'worried'));
+        const canAfford = run.cash >= BET;
+        controls.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } }, [
+          el('button', { class: 'btn', disabled: canAfford ? null : '', onclick: nextHand },
+            canAfford ? `Deal again (${Engine.fmt(BET)})` : 'Out of cash'),
+          el('button', { class: 'btn gold', onclick: leave }, 'Leave table'),
         ]));
-        controls.appendChild(el('p', { class:'muted center', style:{marginTop:'6px'} },
-          `You'll take home ${Engine.fmt(winnings)} from this ${Engine.fmt(t.buyIn)} table.`));
+        controls.appendChild(el('p', { class: 'muted center', style: { marginTop: '6px' } },
+          `This table: put in ${Engine.fmt(wagered)} · took back ${Engine.fmt(returned)}`));
       } else {
-        controls.appendChild(el('p', { class:'muted center' }, 'Dealer is playing…'));
+        controls.appendChild(el('p', { class: 'muted center' }, 'Dealer is playing…'));
       }
-      wrap.appendChild(board);
       wrap.appendChild(controls);
     }
 
     function confirmExit() {
-      if (phase === 'done') { cashOut(); return; }
+      if (closed) return;
+      if (phase === 'done') { leave(); return; }
       UI.modal({
         title: 'Leave the table?',
-        bodyNodes: [ Mama.speech("Leaving mid-hand means you forfeit this round's bet, dear. Finish the hand first?", 'stern') ],
+        bodyNodes: [Mama.speech(`Leaving mid-hand means you give up this hand's ${Engine.fmt(handBet)} bet, dear. Finish the hand first?`, 'stern')],
         buttons: [
           { label: 'Finish the hand', class: 'gold' },
-          { label: 'Forfeit & leave', class: 'wood', onClick: (c) => { c(); winnings = 0; outcome = 'lose'; cashOut(); } },
+          { label: 'Give up the bet & leave', class: 'wood', onClick: (c) => { c(); leave(); } },
         ],
       });
     }
 
-    startRound();
+    dealHand();
     return wrap;
   }
 
-  window.Blackjack = { render, _test: { makeShoe, handValue, isBlackjack } };
+  window.Blackjack = { render, _test: { makeShoe, handValue, isBlackjack, handReturn } };
 })();

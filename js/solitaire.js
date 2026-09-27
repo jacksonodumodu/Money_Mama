@@ -70,7 +70,10 @@
       return { cash, placed, complete };
     }
 
+    let finished = false;
     function finish() {
+      if (finished) return;           // never pay out twice
+      finished = true;
       const p = payout();
       const res = Engine.settleGame(run, p.cash);
       onEarn(res, {
@@ -80,6 +83,7 @@
     }
 
     function draw() {
+      if (finished) return;
       if (g.stock.length === 0) {
         g.stock = g.waste.reverse().map(c => ({ ...c, faceUp: false }));
         g.waste = [];
@@ -115,6 +119,7 @@
     }
 
     function onCardTap(from, col, index) {
+      if (finished) return;
       const pile = from === 'waste' ? g.waste : g.tableau[col];
       const card = pile[index];
       if (!card || !card.faceUp) return;
@@ -122,7 +127,6 @@
       // second tap = try to move selection here
       if (g.sel) {
         const sel = g.sel;
-        const selPile = sel.from === 'waste' ? g.waste : g.tableau[sel.from === 'tableau' ? sel.col : 0];
         const moving = sel.from === 'waste' ? [g.waste[g.waste.length-1]] : g.tableau[sel.col].slice(sel.index);
         const destTop = g.tableau[col][g.tableau[col].length - 1];
         if (from === 'tableau' && canStackTableau(moving[0], destTop)) {
@@ -218,7 +222,7 @@
       // stock + waste + foundations
       const top = el('div', { class: 'sol-top' });
       const left = el('div', { style: { display: 'flex', gap: '4px', width: '30%' } }, [
-        el('div', { style: { flex: 1 } }, cardEl(g.stock.length ? { faceUp: false } : null, { onclick: draw })),
+        el('div', { style: { flex: 1 } }, cardEl(g.stock.length ? { id: 'stock', faceUp: false } : null, { onclick: draw })),
         el('div', { style: { flex: 1 } }, g.waste.length
           ? cardEl(g.waste[g.waste.length-1], { selected: g.sel && g.sel.from==='waste', onclick: () => onCardTap('waste', 0, g.waste.length-1) })
           : cardEl(null, { onclick: draw })),
@@ -260,7 +264,8 @@
             c.style.top = (index * 22) + 'px';
             pile.appendChild(c);
           });
-          pile.style.height = ((colArr.length - 1) * 22 + 60) + 'px';
+          // invisible card-shaped spacer: pile height = fan offset + one real card height
+          pile.appendChild(el('div', { class: 'card pile-spacer', style: { marginTop: ((colArr.length - 1) * 22) + 'px' } }));
         }
         piles.appendChild(pile);
       });
@@ -268,11 +273,12 @@
 
       board.appendChild(el('div', { class: 'spacer' }));
       board.appendChild(el('p', { class: 'muted center' }, 'Tap a card to auto-send to foundations, or tap a card then a column to move it. Draw from the deck top-left.'));
-      board.appendChild(el('button', { class: 'btn gold', onclick: finish }, '💵 Cash out my winnings'));
+      board.appendChild(el('button', { class: 'btn gold', onclick: confirmExit }, '💵 Cash out'));
       wrap.appendChild(board);
     }
 
     function confirmExit() {
+      if (finished) return;
       const p = payout();
       UI.modal({
         title: 'Cash out?',

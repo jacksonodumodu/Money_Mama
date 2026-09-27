@@ -18,20 +18,30 @@
 
   function saveAll() { Engine.save(state); }
 
-  function topbar() {
+  function statPills() {
     const run = state.run;
+    return el('div', { class: 'stat-pills' }, [
+      el('div', { class: 'pill cash' }, ['💵 ' + fmt(run.cash)]),
+      run.debt > 0 ? el('div', { class: 'pill debt' }, ['💳 ' + fmt(run.debt)]) : null,
+      el('div', { class: 'pill week' }, ['📅 Wk ' + run.week]),
+    ]);
+  }
+  function topbar() {
     return el('div', { class: 'topbar' }, [
       el('div', { class: 'brand' }, [
         el('span', { class: 'brand-face', html: Mama.portrait('happy', 26) }),
-        ' Money Mama',
+        el('span', { class: 'brand-text' }, 'Money Mama'),
       ]),
-      el('div', { class: 'stat-pills' }, [
-        el('div', { class: 'pill cash' }, ['💵 ' + fmt(run.cash)]),
-        run.debt > 0 ? el('div', { class: 'pill debt' }, ['💳 ' + fmt(run.debt)]) : null,
-        el('div', { class: 'pill week' }, ['📅 Wk ' + run.week]),
-      ]),
+      statPills(),
     ]);
   }
+  // When a game moves money mid-play (e.g. a blackjack bet), save it right
+  // away and refresh the balance shown in the top bar.
+  UI.hooks.moneyChanged = () => {
+    saveAll();
+    document.querySelectorAll('#app > .screen:not(.screen-exit) .stat-pills')
+      .forEach(p => p.replaceWith(statPills()));
+  };
 
   function screen(children) {
     return el('div', { class: 'screen' }, [topbar(), ...children]);
@@ -74,7 +84,7 @@
         gameTile('tile-bejeweled', '🍷', "Mom's Match", `Buy-in ${fmt(t.buyIn)}`, () => startGame('bejeweled'), !canPlay),
         gameTile('tile-blackjack', '🂡', 'Blackjack', `Buy-in ${fmt(t.buyIn)}`, () => startGame('blackjack'), !canPlay),
         gameTile('tile-euchre', '🎴', 'Euchre', `Buy-in ${fmt(t.buyIn)}`, () => startGame('euchre'), !canPlay),
-        gameTile('tile-bank', '🏦', "Mama's Bank", 'Save / Loans', () => go('bank')),
+        gameTile('tile-bank wide', '🏦', "Mama's Bank", 'Save / Loans', () => go('bank')),
       ]),
 
       !canPlay ? el('p', { class:'warn center' }, `You need ${fmt(t.buyIn)} to play a game. Skip a week to collect your paycheck!`) : null,
@@ -82,8 +92,13 @@
       // Mama's tip of the moment
       el('div', { class: 'panel tips-card' }, [
         el('h2', null, "Mama's Tip"),
-        Mama.tip(tipIndex),
-        el('button', { class:'btn ghost small', onclick: () => { tipIndex++; renderHub(); } }, 'Another tip →'),
+        el('div', { class: 'tip-slot' }, Mama.tip(tipIndex)),
+        el('button', { class:'btn ghost small', onclick: (e) => {
+          // swap just the tip, instead of re-rendering the whole hub
+          tipIndex++;
+          const slot = e.currentTarget.parentNode.querySelector('.tip-slot');
+          UI.clear(slot).appendChild(Mama.tip(tipIndex));
+        } }, 'Another tip →'),
         run.debt > 0 ? el('p', { class:'warn', style:{marginTop:'8px'} }, `⚠️ You owe ${fmt(run.debt)} and it grows every week. Pay it down!`) : null,
       ]),
 
@@ -166,9 +181,9 @@
     parts.push(el('p', null, summary.detail));
     // net result vs the buy-in — the key teaching moment
     if (won) {
-      parts.push(el('p', { class:'good' }, `🎉 You won ${fmt(result.gross)} on a ${fmt(result.buyIn)} buy-in — up ${fmt(result.net)}!`));
+      parts.push(el('p', { class:'good' }, `🎉 You put in ${fmt(result.buyIn)} and took home ${fmt(result.gross)} — up ${fmt(result.net)}!`));
     } else {
-      parts.push(el('p', { class:'warn' }, `😬 You won ${fmt(result.gross)} but the buy-in was ${fmt(result.buyIn)} — down ${fmt(-result.net)} this round.`));
+      parts.push(el('p', { class:'warn' }, `😬 You put in ${fmt(result.buyIn)} and took home ${fmt(result.gross)} — down ${fmt(-result.net)}.`));
     }
     parts.push(el('p', { class:'good' }, `💼 Weekly paycheck: +${fmt(result.tick.income)}`));
     if (result.tick.investGain > 0) parts.push(el('p', { class: 'good' }, `📈 Savings grew +${fmt(result.tick.investGain)}`));
@@ -198,7 +213,7 @@
 
   function handleWin() {
     const run = state.run;
-    Engine.completeTier(state);
+    Engine.completeTier(state);   // guarded in the engine: counts once
     saveAll();
     const t = Engine.tierById(run.tierId);
     const nextUnlocked = run.tierId < 3;
@@ -224,7 +239,7 @@
     modal({
       emoji: '💸', title: 'The debt caught up with you!',
       bodyNodes: [
-        Mama.speech("Oh honey… that loan grew faster than you could pay it. That's exactly how debt traps folks in real life — but Mama's not mad.", 'worried'),
+        Mama.speech("Oh honey… you owe more than everything you've got, and the interest on that loan is now bigger than your whole paycheck. Working can't outrun it anymore. That's exactly how debt traps folks in real life — but Mama's not mad.", 'worried'),
         el('p', null, `I've set you back on your feet at your last checkpoint with ${fmt(restored)}. This time, collect your paycheck, pay down debt, and let savings grow!`),
       ],
       buttons: [ { label: "Okay, Mama", class: 'gold', onClick: (c) => { c(); renderHub(); } } ],
